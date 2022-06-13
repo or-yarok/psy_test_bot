@@ -98,7 +98,7 @@ class User:
 
     @staticmethod
     def _answers_buttons(question_num: str, answers_text) -> list[telebot.types.InlineKeyboardButton]:
-        prefix = "Q#" + question_num + "_A#"
+        prefix = f"Q#{question_num}_A#"
         btns_txt = []
         btns_cb_data = []
         for ans_num, text in answers_text:
@@ -249,15 +249,17 @@ def initialize():
                            "Выбирите тест из списка ниже.",
                      "EN": "You can take few psychological assessments (test) using this chatbot.\n"
                            "Please, choose a test from the list below."}[LANGUAGE]
-    start_menu_buttons = list(map(telebot.types.KeyboardButton,
-                                  [title for title in all_quizes]))
+    start_menu_buttons = list(map(telebot.types.KeyboardButton, list(all_quizes)))
     start_kb = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True,
                                                  resize_keyboard=True,
                                                  row_width=1, ).add(*start_menu_buttons)
-    start_menu = Menu(msg=start_message,
-                      kb=start_kb,
-                      handler=lambda msg: User.users[msg.from_user.id].ref.start_quiz(msg.text, msg.chat.id))
-    return start_menu
+    return Menu(
+        msg=start_message,
+        kb=start_kb,
+        handler=lambda msg: User.users[msg.from_user.id].ref.start_quiz(
+            msg.text, msg.chat.id
+        ),
+    )
 
 
 start_menu = initialize()
