@@ -29,7 +29,6 @@ BUTTONS = {"next": BTN_NEXT,
            }
 
 
-
 def first(d: Sequence):
     """
     Returns the first element of any sequence
@@ -38,14 +37,22 @@ def first(d: Sequence):
 
 
 class User:
-    users = OrderedDict()
+    users = OrderedDict()  # dictionary of all instances of the class
 
     @classmethod
-    def register_user(cls, user):
+    def register_user(cls, user: User) -> None:
+        """
+        Adds a new user to class attribute `users` if the maximum number of users is not reached
+
+        :param user: instance of the ``User`` class
+        :return: None
+        """
         if user.user_id in cls.users:
             cls.users[user.user_id] = RegisteredUser(user, time.time())
+            return None
         if len(cls.users) < MAX_USERS:
             cls.users[user.user_id] = RegisteredUser(user, time.time())
+            return None
         else:
             first_user_id = first(cls.users)
             if (time.time() - cls.users[first_user_id].timestamp) > MAX_TIME:
