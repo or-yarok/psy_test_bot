@@ -4,9 +4,9 @@ import telebot
 from dotenv import load_dotenv
 import os
 from collections import OrderedDict, namedtuple
-from config import LANGUAGE, MAX_USERS, MAX_TIME
+from config import LANGUAGE, MAX_USERS, MAX_TIME, MAX_SESSION_TIME, MAX_IDLE_TIME
 import time
-from typing import Sequence, Callable
+from typing import Sequence, Callable, Any
 from typing import NamedTuple
 from quiz import Quiz
 from buttons import BTN_NEXT, BTN_OK, BTN_QUIT, BTN, make_inline_kb, make_inline_buttons
@@ -37,7 +37,7 @@ def first(d: Sequence):
 
 
 class User:
-    users = OrderedDict()  # dictionary of all instances of the class
+    users: OrderedDict[int, RegisteredUser] = OrderedDict()  # dictionary of all instances of the class
 
     @classmethod
     def register_user(cls, user: User) -> None:
@@ -48,26 +48,48 @@ class User:
         :return: None
         """
         if user.user_id in cls.users:
-            cls.users[user.user_id] = RegisteredUser(user, time.time())
+            del cls.users[user.user_id]
+            cls._add_new_user(user)
             return None
         if len(cls.users) < MAX_USERS:
-            cls.users[user.user_id] = RegisteredUser(user, time.time())
+            cls._add_new_user(user)
             return None
+        if cls._inactive_user() is None:
+            raise MaximumUsersNumberReached(MAX_USERS, "few")
         else:
-            first_user_id = first(cls.users)
-            if (time.time() - cls.users[first_user_id].timestamp) > MAX_TIME:
-                cls.users.popitem(False)
-                cls.users[user.user_id] = (user, time.time())
-            else:
-                estimated_delay = (MAX_TIME - (time.time() - cls.users[first_user_id][1])) / 60
-                raise MaximumUsersNumberReached(MAX_USERS, estimated_delay)
+            inactive_user = cls._inactive_user()
+            inactive_user.session_over(inactive_user.chat_id)
+            cls._add_new_user(user)
+            return None
+
+    @classmethod
+    def _add_new_user(cls, user: User):
+        cls.users[user.user_id] = RegisteredUser(user, time.time())
+
+    @classmethod
+    def _is_user_inactive(cls, user: User) -> bool:
+        current_time = time.time()
+        return all(((current_time - user.enter_time) > MAX_SESSION_TIME,
+                    (current_time - user.last_activity_time) > MAX_IDLE_TIME))
+
+    @classmethod
+    def _inactive_user(cls) -> User | None:
+        """
+
+        :return: returns inactive user if such one is detected, or None
+        """
+        first_user_id = first(cls.users)
+        if cls._is_user_inactive(cls.users[first_user_id].ref):
+            return cls.users[first_user_id].ref
+        return None # if there is no inactive user
 
     @classmethod
     def unregister_user(cls, user_id: int):
         cls.users.pop(user_id)
 
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, chat_id: int):
         self.user_id = user_id
+        self.chat_id = chat_id
         self.online = True
         self.scores = None
         self.quiz = None
@@ -75,8 +97,14 @@ class User:
         self.answer_id = None
         self.__class__.register_user(self)
         self._on_press_ok = lambda x: True
+        self.last_activity_time = self.enter_time
+
+    @property
+    def enter_time(self) -> float:
+        return self.__class__.users[self.user_id].timestamp
 
     def start_quiz(self, title: str, chat_id: int):
+        self.last_activity_time = time.time()
         print(f'Quiz start for user: {self.user_id}')
         quiz = all_quizes[title]
         self.quiz = quiz
@@ -90,6 +118,7 @@ class User:
         show_msg(chat_id, msg=start_quiz_msg, btns=[BTN_NEXT, BTN_QUIT])
 
     def next_question(self, chat_id: int):
+        self.last_activity_time = time.time()
         if self.question_id == len(self.quiz.questions) - 1:
             self.show_results(chat_id)
         else:
@@ -119,10 +148,10 @@ class User:
         self.__class__.unregister_user(self.user_id)
 
     def show_results(self, chat_id: int):
+        self.last_activity_time = time.time()
         results: str = self.quiz.get_result(self.scores)
         show_msg(chat_id, msg=results, btns=[BTN_OK,])
         self._on_press_ok = self.session_over
-
 
     def update_scores(self, question_id: int, answer_id: int):
         new_scores: dict[str, int] = self.quiz.get_answer_scores(question_id, answer_id)
@@ -185,7 +214,7 @@ def start_menu(message):
     :type message: telebot.types.Message
     """
     try:
-        make_new_user(message.from_user.id)
+        make_new_user(message.from_user.id, message.chat.id)
     except MaximumUsersNumberReached:
         pass
     else:  # if everything is ok, and user is instantiated
@@ -193,7 +222,7 @@ def start_menu(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data in BUTTONS.keys())
-def standard_buttons_handler(query):
+def standard_buttons_handler(query: telebot.types.CallbackQuery):
     """
     When one of the standard buttons (*OK*, *Next*, *Quit*) is pressed,
     this function handles it.
@@ -203,12 +232,21 @@ def standard_buttons_handler(query):
     :param query: telebot.types.CallbackQuery
     """
     bot.answer_callback_query(query.id)
+    if query.from_user.id not in User.users:
+        unregistered_user_input(query.from_user.id, query.message.chat.id)
+        return
     if query.data == "next":
         next_pressed(query)
     elif query.data == "quit":
         quit_pressed(query)
     elif query.data == "ok":
         ok_pressed(query)
+
+
+def unregistered_user_input(user_id, chat_id):
+    msg = {"RU": "Для начала работы введите команду /start",
+           "EN": "To start a session type the command /start"}[LANGUAGE]
+    show_msg(chat_id, msg=msg, btns=None)
 
 
 def next_pressed(query: telebot.types.CallbackQuery):
@@ -223,8 +261,8 @@ def quit_pressed(query):
 def ok_pressed(query):
     User.users[query.from_user.id].ref.send_ok(query.message.chat.id)
 
-def make_new_user(user_id: int):
-    User(user_id)
+def make_new_user(user_id: int, chat_id: int):
+    User(user_id, chat_id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("Q#"))
@@ -236,6 +274,9 @@ def answer_buttons_handler(query: telebot.types.CallbackQuery):
     :param query: telebot.types.CallbackQuery
     """
     bot.answer_callback_query(query.id)
+    if query.from_user.id not in User.users:
+        unregistered_user_input(query.from_user.id, query.message.chat.id)
+        return
     question_num, answer_num = _parse_answer_callback(query.data)
     User.users[query.from_user.id].ref.update_scores(question_num, answer_num)
     del_msg(query.message.chat.id, query.message.message_id)
