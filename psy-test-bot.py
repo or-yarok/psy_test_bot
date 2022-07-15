@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 import os
 from collections import OrderedDict, namedtuple
 from config import LANGUAGE, MAX_USERS, MAX_TIME, MAX_SESSION_TIME, MAX_IDLE_TIME
+# config.TEST_EXTN stores an extension of files containing questionnaires ("txt" by default)
+# config.TEST_DIR stores a directory (full path) where questionnaires are located
+from config import TEST_EXTN, TESTS_DIR
 import time
 from typing import Sequence, Callable, Any
 from typing import NamedTuple
@@ -258,8 +261,10 @@ def quit_pressed(query):
     del_msg(query.message.chat.id, query.message.message_id)
     User.users[query.from_user.id].ref.session_over(query.message.chat.id)
 
+
 def ok_pressed(query):
     User.users[query.from_user.id].ref.send_ok(query.message.chat.id)
+
 
 def make_new_user(user_id: int, chat_id: int):
     User(user_id, chat_id)
@@ -290,9 +295,24 @@ def _parse_answer_callback(callback_data: str) -> tuple[int, int]:
     return question_num, answer_num
 
 
+def get_tests_filenames() -> list[str]:
+    """
+    Returns list of filenames of questionnaires using global variables TESTS_DIR and TEST_EXTN
+
+    :return: list of filenames of questionnaires
+    """
+    pwd = os.getcwd()
+    tests_full_path = os.path.join(pwd, TESTS_DIR)
+    filenames = [os.path.join(tests_full_path, name)
+                 for name in os.listdir(tests_full_path)
+                 if name.endswith(TEST_EXTN)]
+    return filenames
+
+
 def initialize():
-    quiz = Quiz.quiz_from_file()
-    all_quizes[quiz.title] = quiz
+    for name in get_tests_filenames():  # iterate over filenames of questionnaires
+        quiz = Quiz.quiz_from_file(name)
+        all_quizes[quiz.title] = quiz
     start_message = {"RU": "В этом чатботе можно пройти несколько проверенных психологических тестов.\n"
                            "Выбирите тест из списка ниже.",
                      "EN": "You can take few psychological assessments (test) using this chatbot.\n"
