@@ -9,7 +9,7 @@ from config import LANGUAGE, MAX_USERS, MAX_TIME, MAX_SESSION_TIME, MAX_IDLE_TIM
 # config.TEST_DIR stores a directory (full path) where questionnaires are located
 from config import TEST_EXTN, TESTS_DIR
 import time
-from typing import Sequence, Callable, Any
+from typing import Sequence, Callable, Any, Literal
 from typing import NamedTuple
 from quiz import Quiz
 from buttons import BTN_NEXT, BTN_OK, BTN_QUIT, BTN, make_inline_kb, make_inline_buttons
@@ -108,7 +108,10 @@ class User:
 
     def start_quiz(self, title: str, chat_id: int):
         self.last_activity_time = time.time()
-        print(f'Quiz start for user: {self.user_id}')
+        # print(f'Quiz start for user: {self.user_id}')
+        QUIZ_STARTING_MSG = {"EN": "quiz is starting...",
+                             "RU": "загружается текст опросника..."}[LANGUAGE]
+        remove_menu(chat_id, QUIZ_STARTING_MSG)
         quiz = all_quizes[title]
         self.quiz = quiz
         self.scores = {}
@@ -129,9 +132,10 @@ class User:
                 self.question_id += 1
             except TypeError:  # if this is the first question, self.question_id is None
                 self.question_id = 0
-            question_text: str = self.quiz.question_text(self.question_id)
-            answers_text = self.quiz.answers_text(self.question_id)
             question_num = str(self.question_id)
+            prefix = f'({str(self.question_id+1)}/{str(len(self.quiz.questions))}) '
+            question_text: str = prefix + self.quiz.question_text(self.question_id)
+            answers_text = self.quiz.answers_text(self.question_id)
             btns = self._answers_buttons(question_num, answers_text)
             show_msg(chat_id, msg=question_text, btns=btns)
 
@@ -168,7 +172,7 @@ class User:
         show_msg(chat_id, msg=msg)
 
     def send_ok(self, chat_id: int):
-        self._on_press_ok(chat_id=chat_id)
+        self._on_press_ok(chat_id)
 
 
 class RegisteredUser(NamedTuple):
@@ -182,15 +186,24 @@ class Menu(NamedTuple):
     handler: Callable
 
 
+start_menu = None
+
+
 def show_msg(chat_id: int, msg: str,
-             btns: list[telebot.types.InlineKeyboardButton] | None = None) -> None:
-    print(chat_id, msg, btns)
+             btns: list[telebot.types.InlineKeyboardButton] | None = None,
+             parse_mode: Literal['markdown', 'html', 'plain'] = "markdown") -> None:
+    if '\\n' in msg:
+        msg = cr_processing(msg)
     if btns is not None:
         markup = telebot.types.InlineKeyboardMarkup(row_width=1)
         markup.add(*btns)
     else:
         markup = telebot.types.ReplyKeyboardRemove()
-    msg = bot.send_message(chat_id, msg, reply_markup=markup)
+    msg = bot.send_message(chat_id, msg, reply_markup=markup, parse_mode=parse_mode)
+
+
+def cr_processing(s: str) -> str:
+    return s.replace('\\n','\n')
 
 
 def show_menu(message: telebot.types.Message, menu: Menu) -> None:
@@ -199,12 +212,22 @@ def show_menu(message: telebot.types.Message, menu: Menu) -> None:
     bot.register_next_step_handler(message, menu.handler)
 
 
+def remove_menu(chat_id: int, msg: str = "...") -> None:
+    markup = telebot.types.ReplyKeyboardRemove(selective=False)
+    message = bot.send_message(chat_id, msg,
+                     reply_markup=markup, parse_mode="html")
+    del_msg(chat_id, message.id)
+
+
 def del_msg(chat_id: int, message_id: int):
-    bot.delete_message(chat_id=chat_id, message_id=message_id)
+    try:
+        bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except:
+        print(f'{message_id} doesn\'t exist')
 
 
 @bot.message_handler(commands=['start'])
-def start_menu(message):
+def starting_menu(message):
     """
     To be called when ``/start`` command is entered.
 
@@ -219,7 +242,10 @@ def start_menu(message):
     try:
         make_new_user(message.from_user.id, message.chat.id)
     except MaximumUsersNumberReached:
-        pass
+        maximum_users_number_reached_notification = {"RU": "Достигнуто максимально количество пользователей, "
+                                                           "попробуйте позднее",
+                                                     "EN": "Max number of users is reached. Try again later"}[LANGUAGE]
+        show_msg(message.chat.id, msg=maximum_users_number_reached_notification)
     else:  # if everything is ok, and user is instantiated
         show_menu(message, start_menu)
 
@@ -310,6 +336,7 @@ def get_tests_filenames() -> list[str]:
 
 
 def initialize():
+    global start_menu
     for name in get_tests_filenames():  # iterate over filenames of questionnaires
         quiz = Quiz.quiz_from_file(name)
         all_quizes[quiz.title] = quiz
@@ -328,7 +355,8 @@ def initialize():
     return start_menu
 
 
-start_menu = initialize()
+
 
 if __name__ == "__main__":
+    start_menu = initialize()
     bot.infinity_polling()
