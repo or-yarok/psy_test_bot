@@ -90,7 +90,7 @@ class RawData:
     answers_type: str = "COMMON"
     answers: Sequence[Answer] = None
     scales: dict[str, Scale] = None
-    results: Result = Result()
+    results: Result = None
 
     def __repr__(self):
         if self.answers_type == "COMMON":
@@ -132,6 +132,7 @@ class Quiz:
                     }
 
         raw_data = RawData()  # stores raw data before creating ``Quiz`` object
+        raw_data.results = Result()
 
         try:
             with open(filename, "r", encoding="utf8") as f:
