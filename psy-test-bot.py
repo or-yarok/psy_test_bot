@@ -59,11 +59,10 @@ class User:
             return None
         if cls._inactive_user() is None:
             raise MaximumUsersNumberReached(MAX_USERS, "few")
-        else:
-            inactive_user = cls._inactive_user()
-            inactive_user.session_over(inactive_user.chat_id)
-            cls._add_new_user(user)
-            return None
+        inactive_user = cls._inactive_user()
+        inactive_user.session_over(inactive_user.chat_id)
+        cls._add_new_user(user)
+        return None
 
     @classmethod
     def _add_new_user(cls, user: User):
@@ -136,7 +135,7 @@ class User:
             except TypeError:  # if this is the first question, self.question_id is None
                 self.question_id = 0
             question_num = str(self.question_id)
-            prefix = f'({str(self.question_id+1)}/{str(len(self.quiz.questions))}) '
+            prefix = f'({str(self.question_id + 1)}/{len(self.quiz.questions)}) '
             question_text: str = prefix + self.quiz.question_text(self.question_id)
             answers_text = self.quiz.answers_text(self.question_id)
             btns = self._answers_buttons(question_num, answers_text)
@@ -144,7 +143,7 @@ class User:
 
     @staticmethod
     def _answers_buttons(question_num: str, answers_text) -> list[telebot.types.InlineKeyboardButton]:
-        prefix = "Q#" + question_num + "_A#"
+        prefix = f"Q#{question_num}_A#"
         btns_txt = []
         btns_cb_data = []
         for ans_num, text in answers_text:
@@ -263,13 +262,16 @@ def starting_menu(message):
 def commands_processing(message: telebot.types.Message):
     chat_id = message.chat.id
 
-    # extracting a command
-    command = None
     entity: telebot.types.MessageEntity
-    for entity in message.entities:
-        if entity.type == 'bot_command':
-            command = message.text[entity.offset + 1:entity.length + entity.offset]
-            break
+    command = next(
+        (
+            message.text[entity.offset + 1 : entity.length + entity.offset]
+            for entity in message.entities
+            if entity.type == 'bot_command'
+        ),
+        None,
+    )
+
     if command is None:
         return  # no command discovered
 
@@ -391,10 +393,11 @@ def get_tests_filenames() -> list[str]:
     """
     pwd = os.getcwd()
     tests_full_path = os.path.join(pwd, TESTS_DIR)
-    filenames = [os.path.join(tests_full_path, name)
-                 for name in os.listdir(tests_full_path)
-                 if name.endswith(TEST_EXTN)]
-    return filenames
+    return [
+        os.path.join(tests_full_path, name)
+        for name in os.listdir(tests_full_path)
+        if name.endswith(TEST_EXTN)
+    ]
 
 
 def initialize():
@@ -406,8 +409,7 @@ def initialize():
                            "Выбирите тест из списка ниже.",
                      "EN": "You can take few psychological assessments (test) using this chatbot.\n"
                            "Please, choose a test from the list below."}[LANGUAGE]
-    start_menu_buttons = list(map(telebot.types.KeyboardButton,
-                                  [title for title in all_quizes]))
+    start_menu_buttons = list(map(telebot.types.KeyboardButton, list(all_quizes)))
     start_kb = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True,
                                                  resize_keyboard=True,
                                                  row_width=1, ).add(*start_menu_buttons)
