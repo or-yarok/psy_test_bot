@@ -77,10 +77,7 @@ Keys are names of scales (str). Values are list of interpretations for the relev
             records = self[k]
         except KeyError:
             return None
-        for record in records:
-            if v in record.interval:
-                return record
-        return None
+        return next((record for record in records if v in record.interval), None)
 
 
 class RawData:
@@ -96,11 +93,11 @@ class RawData:
         if self.answers_type == "COMMON":
             answers = "COMMON"
         else:
-            answers = self.answers[0].text + '...' + self.answers[-1].text
+            answers = f'{self.answers[0].text}...{self.answers[-1].text}'
         return f"title: {self.title} \ndescription: {self.description} \n" +\
-               f"number of questions: {len(self.questions)}\n" +\
-               f"scales: {self.scales} \nresults: {self.results}\nanswers: " +\
-               f"{answers}"
+                   f"number of questions: {len(self.questions)}\n" +\
+                   f"scales: {self.scales} \nresults: {self.results}\nanswers: " +\
+                   f"{answers}"
 
 
 class Quiz:
@@ -165,14 +162,14 @@ class Quiz:
     @staticmethod
     def answers_handle(lines: list[str], raw_data: RawData) -> RawData:
         answers_type: str = lines[0][len("answers") + 1:].strip()
-        if answers_type == "SPECIFIC":
-            raw_data.answers_type = answers_type
-            raw_data.answers = None
-            return raw_data
-        elif answers_type == "COMMON":
+        if answers_type == "COMMON":
             answers = Quiz.answers_list(lines[1:])
             raw_data.answers_type = "COMMON"
             raw_data.answers = answers
+            return raw_data
+        elif answers_type == "SPECIFIC":
+            raw_data.answers_type = answers_type
+            raw_data.answers = None
             return raw_data
 
     @staticmethod
@@ -184,7 +181,7 @@ class Quiz:
             answer_scales: dict[str, int] = {}
             for scale in raw_scales.split(","):
                 scale_name, scale_score = scale.strip().split()
-                answer_scales.update({scale_name.strip(): int(scale_score)})
+                answer_scales[scale_name.strip()] = int(scale_score)
             answer = Answer(answer_id, answer_text.strip(), answer_scales)
             answers.append(answer)
         return answers
@@ -257,7 +254,7 @@ class Quiz:
         :param raw_string: str (a text with curly braces)
         :return: tuple of 3 (three) strings
         """
-        if raw_string.count("{") == 0 or raw_string.count("}") == 0:
+        if "{" not in raw_string or "}" not in raw_string:
             return (raw_string, "", "")
         l: int = raw_string.find("{")
         r: int = raw_string.rfind("}")
@@ -299,9 +296,10 @@ class Quiz:
         :return: generator -> a para of answer id and answer text for one iteration
         """
         answers = self._get_answers_list(question_id)
-        assert isinstance(answers, Sequence) and all([isinstance(answer, Answer) for answer in answers]), 'Answers ' \
-                                                                                                          'are not ' \
-                                                                                                          'provided'
+        assert isinstance(answers, Sequence) and all(
+            isinstance(answer, Answer) for answer in answers
+        ), ('Answers ' 'are not ' 'provided')
+
         return ((answer.id, answer.text) for answer in answers)
 
     def get_answer_scores(self, question_id: int, answer_id: int) -> list[dict[str, int]]:
