@@ -15,7 +15,7 @@ from quiz import Quiz
 from buttons import BTN_NEXT, BTN_OK, BTN_QUIT, BTN, make_inline_kb, make_inline_buttons
 from errors import MaximumUsersNumberReached
 from quiz import Scale
-
+from commands import Commands, all_commands
 
 # CREDENTIALS
 load_dotenv()
@@ -93,7 +93,6 @@ class User:
     def __init__(self, user_id: int, chat_id: int):
         self.user_id = user_id
         self.chat_id = chat_id
-        self.online = True
         self.scores = None
         self.quiz = None
         self.question_id = None
@@ -108,6 +107,8 @@ class User:
 
     def start_quiz(self, title: str, chat_id: int):
         self.last_activity_time = time.time()
+        if title not in all_quizes:
+            return
         # print(f'Quiz start for user: {self.user_id}')
         QUIZ_STARTING_MSG = {"EN": "quiz is starting...",
                              "RU": "загружается текст опросника..."}[LANGUAGE]
@@ -125,6 +126,8 @@ class User:
 
     def next_question(self, chat_id: int):
         self.last_activity_time = time.time()
+        if self.quiz is None:
+            return
         if self.question_id == len(self.quiz.questions) - 1:
             self.show_results(chat_id)
         else:
@@ -173,6 +176,12 @@ class User:
 
     def send_ok(self, chat_id: int):
         self._on_press_ok(chat_id)
+
+    def reset_user_data(self):
+        self.scores = None
+        self.quiz = None
+        self.question_id = None
+        self.answer_id = None
 
 
 class RegisteredUser(NamedTuple):
@@ -248,6 +257,59 @@ def starting_menu(message):
         show_msg(message.chat.id, msg=maximum_users_number_reached_notification)
     else:  # if everything is ok, and user is instantiated
         show_menu(message, start_menu)
+
+
+@bot.message_handler(commands=all_commands)
+def commands_processing(message: telebot.types.Message):
+    chat_id = message.chat.id
+
+    # extracting a command
+    command = None
+    entity: telebot.types.MessageEntity
+    for entity in message.entities:
+        if entity.type == 'bot_command':
+            command = message.text[entity.offset + 1:entity.length + entity.offset]
+            break
+    if command is None:
+        return  # no command discovered
+
+    # commands executing
+    if command == Commands.DISCLAIMER.value:
+        disclaimer_txt = {'RU': 'Представленная здесь информация не является профессиональной консультацией '\
+                          'и не заменяет обращения к специалисту. Не воспринимайте результаты тестов как '\
+                          'истину в последней инстанции. Вся информация размещена в информацонных и развлекательных '\
+                          'целях.',
+                          'EN': 'Information in this chatbot is not a professional advice, and is not any '\
+                          'kind of substitution for seeking a professional advice. Please, do not take test '\
+                          'results as ultimate truth. All information is presented for informational '\
+                          'and entertainment purposes.'
+                          }[LANGUAGE]
+        show_msg(chat_id, msg=disclaimer_txt)
+        return
+    if command == Commands.AUTHOR.value:
+        about_author_txt = {'RU': 'Разработчик чатбота @EdFromChelly. Обращайтесь по вопросам развития чатбота, '\
+                            'присылайте сообщения о выявленных ошибках, предложения новых тестов.\n' \
+                            'Заказывайте разработку своего чатбота :).',
+                            'EN': 'This chatbot is developed by @EdFromChelly. Send a message regarding a '\
+                            'development of this chatbot, report about errors discovered by you, offer new '\
+                            'tests (questionnaire). \nOrder your own chatbot:).'}[LANGUAGE]
+        show_msg(chat_id, msg=about_author_txt)
+        return
+    if command == Commands.CREDITS.value:
+        credits_txt = {'RU':'Разработчик благодарит за профессиональную помощь в развитии бота телеграм-каналы '\
+                       '@mariamalko и @psyhologia',
+                       'EN':'A developer of this chatbot appreciates telegram-channels @mariamalko and '\
+                       '@psyhologia for professional help with the chatbot\'s development'}[LANGUAGE]
+        show_msg(chat_id, msg=credits_txt)
+        return
+    if command == Commands.QUIT.value and message.from_user.id in User.users:
+        User.users[message.from_user.id].ref.session_over(chat_id)
+    elif command == Commands.MENU.value:
+        if message.from_user.id in User.users:
+            User.users[message.from_user.id].ref.reset_user_data()
+            show_menu(message, start_menu)
+        else:
+            starting_menu(message)
 
 
 @bot.callback_query_handler(func=lambda call: call.data in BUTTONS.keys())
