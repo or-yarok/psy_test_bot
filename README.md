@@ -88,3 +88,12 @@ This block contains interpretation of test results depending on values of scales
 * the first one contains scale name and interval of values (scores); interval boundaries are devided by three dots `...`; if one of boundaris is omitted it is interpreted as 'less than' (left boundary is omitted) or 'greater than' (right boundary is omitted);
 * the second one contains a text of interpretation for this interval of scores enclosed in curly brackets.
 
+## config.py
+
+Configuration file `config.py` contains few settings:
+
+* `LANGUAGE` allows to choose a language of bot interface (not language of questionnaires). At the moment, 'RU' for Russian and 'EN' for English are supported.
+* `MAX_USERS` stores maximum number of users at the same time
+* `MAX_SESSION_TIME` and `MAX_IDLE_TIME` (both are in seconds): if maximum number of users is reached, the user who exceeds maximum duration of a session (`MAX_SESSION_TIME`) and maximum duration of inactivity (`MAX_IDLE_TIME`) will be off when new user will come
+* `TESTS_DIR` stores name of directory where files with questionnaires are located
+* `TEST_EXTN` contains a file extension of files with questionnaires (`txt` by default).
