@@ -64,6 +64,27 @@ The first line of this block contains only the keyword DESCRIPTION.
 
 The description itself may include multiple lines and shall be enclosed in curly brackets.
 
+#### ANSWERS
 
+If different questions of your questionnaire have various set of options of answer or answers are equal for each questions but have different scores for questionnaire's scale(s) you should include one-line block "ANSWERS SPECIFIC". In this case answer options for each question shall be included in the relevant QUESTION block.
 
+If options of answers are identical for all questions and have the same scores you can include all answer options in this block. In this case the first line of this block must contain "ANSWERS COMMON". Each line below must contain:
+* asnwer option 
+* at least one space
+* enclosed in curly brackets, scales named and scores (one space between a scale name and a number which shall be added to this scale if a user chooses this answer option). Pairs of scale name-scores shall be separated from each other by commas (if you have more then a single scale). For exanple:
+```{scale1 1, scale2 -1, scale3 0}```.
+
+#### QUESTION
+
+First list of this block must contain the keyword QUESTION and a text of a question, which is separated from the keyword by a space.
+
+If you have specific answer options for each question you must include answer options in the QUESTION block in the same way as described above for ANSWERS block.
+
+Each question of your questionnaire shall be included in a separate QUESTION block.
+
+#### RESULTS
+
+This block contains interpretation of test results depending on values of scales (scores for each scale). Each interpretation (result) takes two lines:
+* the first one contains scale name and interval of values (scores); interval boundaries are devided by three dots `...`; if one of boundaris is omitted it is interpreted as 'less than' (left boundary is omitted) or 'greater than' (right boundary is omitted);
+* the second one contains a text of interpretation for this interval of scores enclosed in curly brackets.
 
